@@ -32,7 +32,7 @@ int f_max_int(int a, int b) {
     return a > b ? a : b;
 }
 
-void do_process_fd(int fd, int fw, uint64_t offset, uint64_t endoffset, char *buf, int bufsize) {
+void do_process_fd(int fd, int fw, uint64_t offset, uint64_t endoffset, char *buf, char *buf2, int bufsize) {
     uint64_t curofs;
     int i;
     struct stat st;
@@ -52,21 +52,20 @@ void do_process_fd(int fd, int fw, uint64_t offset, uint64_t endoffset, char *bu
     int read_bytes = 0;
     const int no_of_sectors = 10000;
     size_t n;
-    uint8_t *ptr;
+    uint8_t *ptr, *ptrw;
     for(; offset < st.st_size; ) {
         const size_t toread = no_of_sectors * 512 + no_of_sectors * 8;
         read_bytes = read(fd, buf, toread);
 
         ptr = buf;
+        ptrw = buf2;
         for(n = 0; n < no_of_sectors; n++) {
-            if(512 != write(fw, ptr, 512)) {
-                perror("i/o error, write");
-                return;
-            }
-
+            memcpy(ptrw, ptr, 512);
             ptr += 512 + 8;
+            ptrw += 512;
         }
 
+        write(fw, buf2, no_of_sectors * 512);
         offset += toread;
     }
 }
@@ -86,7 +85,9 @@ void process_fn(char *fn, char *ofn, uint64_t offset, uint64_t endoffset) {
     }
 
     char *buf = malloc(8 * 1024 * 1024);
-    do_process_fd(fd, fw, offset, endoffset, buf, 8 * 1024 * 1024);
+    char *buf2 = malloc(8 * 1024 * 1024);
+    do_process_fd(fd, fw, offset, endoffset, buf, buf2, 8 * 1024 * 1024);
+    free(buf2);
     free(buf);
 
     close(fd);
