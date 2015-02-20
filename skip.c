@@ -32,7 +32,7 @@ int f_max_int(int a, int b) {
     return a > b ? a : b;
 }
 
-void do_process_fd(int fd, int fw, uint64_t offset, uint64_t endoffset, char *buf, char *buf2, int bufsize) {
+void do_process_fd(FILE* fd, FILE* fw, uint64_t offset, uint64_t endoffset) {
     uint64_t curofs;
     int i;
     struct stat st;
@@ -40,58 +40,53 @@ void do_process_fd(int fd, int fw, uint64_t offset, uint64_t endoffset, char *bu
 
     prog = 0;
 
-    if(fstat(fd, & st)) {
+    if(fstat(fileno(fd), & st)) {
         perror("fstat");
         return;
     }
 
-    lseek(fd, offset, SEEK_SET);
-    lseek(fw, endoffset, SEEK_SET);
+    fseek(fd, offset, SEEK_SET);
+    fseek(fw, endoffset, SEEK_SET);
 
+    uint8_t secbuf[512];
     uint8_t skipbuf[8];
-    int read_bytes = 0;
-    const int no_of_sectors = 10000;
-    size_t n;
-    uint8_t *ptr, *ptrw;
+
     for(; offset < st.st_size; ) {
-        const size_t toread = no_of_sectors * 512 + no_of_sectors * 8;
-        read_bytes = read(fd, buf, toread);
+        fread(secbuf, 512, 1, fd);
+        fread(skipbuf, 8, 1, fd);
+        fwrite(secbuf, 512, 1, fw);
 
-        ptr = buf;
-        ptrw = buf2;
-        for(n = 0; n < no_of_sectors; n++) {
-            memcpy(ptrw, ptr, 512);
-            ptr += 512 + 8;
-            ptrw += 512;
-        }
-
-        write(fw, buf2, no_of_sectors * 512);
-        offset += toread;
+        offset += 520;
     }
 }
 
 void process_fn(char *fn, char *ofn, uint64_t offset, uint64_t endoffset) {
-    int fd = open(fn, O_RDONLY);
-    if(fd == 0 || fd == -1) {
+    FILE* fd = fopen(fn, "r"); // O_RDONLY);
+    if(fd == NULL) {
         perror("open");
         return;
     }
 
-    int fw = open(ofn, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-    if(fw == 0 || fw == -1) {
-        close(fd);
+    FILE* fw = fopen(ofn, "wb+");
+    if(fw == NULL) {
+        fclose(fd);
         perror("open(O_CREAT)");
         return;
     }
 
     char *buf = malloc(8 * 1024 * 1024);
     char *buf2 = malloc(8 * 1024 * 1024);
-    do_process_fd(fd, fw, offset, endoffset, buf, buf2, 8 * 1024 * 1024);
+
+    setvbuf(fd, buf, _IOFBF, 8 * 1024 * 1024);
+    setvbuf(fw, buf2, _IOFBF, 8 * 1024 * 1024);
+
+    do_process_fd(fd, fw, offset, endoffset);
+
     free(buf2);
     free(buf);
 
-    close(fd);
-    close(fw);
+    fclose(fd);
+    fclose(fw);
 }
 
 int main(int argc, char **argv) {
