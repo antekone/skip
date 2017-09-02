@@ -22,12 +22,10 @@ void syntax() {
     puts("-y <offset>     write offset, 0x12345");
 }
 
-inline
 int f_min_int(int a, int b) {
     return a > b ? b : a;
 }
 
-inline
 int f_max_int(int a, int b) {
     return a > b ? a : b;
 }
